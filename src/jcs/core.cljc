@@ -28,7 +28,7 @@
 ;;   (jcs/canonicalize {:b 1 :a 2})          ;=> "{\"a\":2,\"b\":1}"
 ;;   (jcs/canonicalize-bytes {"a" 1})        ;=> UTF-8 bytes, ready to hash
 (ns jcs.core
-  (:require [clojure.string :as str])
+  (:require [kotoba.lang.text :as str])
   #?(:clj (:import (java.math BigDecimal MathContext RoundingMode)
                    (java.nio.charset StandardCharsets))))
 
@@ -186,7 +186,7 @@
 (defn- hex4 [n]
   (let [s #?(:clj (Integer/toHexString n) :cljs (.toString n 16))]
     ;; RFC 8785 §3.2.2.2: LOWERCASE hexadecimal, four digits.
-    (str "\\u" (str/join (repeat (- 4 (count s)) \0)) (str/lower-case s))))
+    (str "\\u" (str/join (repeat (- 4 (count s)) \0)) (str/lower s))))
 
 ;; No host string builder: JVM StringBuilder and goog.string.StringBuffer have
 ;; no common surface, and a JSON string in a credential is short enough that
