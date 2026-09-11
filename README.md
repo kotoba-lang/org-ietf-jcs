@@ -45,8 +45,8 @@ positive magnitude implements ECMA-262's tie rule ("choose the larger `s`").
 `:cljs` delegates to `Number.prototype.toString`, because in JavaScript that
 **is** the algorithm the RFC cites.
 
-Both hosts are pinned to the same vectors (`test/jcs/core_test.clj` and
-`test/nbb_smoke.cljs`) and produce byte-identical output for all of them.
+Both hosts are pinned to the same vectors (`test/jcs/core_test.cljk` and
+`test/nbb_smoke.cljk`) and produce byte-identical output for all of them.
 
 ## Fail-closed inputs
 
@@ -83,7 +83,7 @@ a silently-rounded value.
 ```bash
 clojure -M:test                              # JVM
 clojure -M:lint
-nbb --classpath src test/nbb_smoke.cljs      # :cljs branch
+nbb --classpath src test/nbb_smoke.cljk      # :cljs branch
 ```
 
 ## License
