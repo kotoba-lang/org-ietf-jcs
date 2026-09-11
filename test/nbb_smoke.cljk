@@ -6,7 +6,7 @@
 ;; ever disagree, every signature made on one and verified on the other breaks,
 ;; so the vectors below are deliberately the same ones the JVM suite pins.
 ;;
-;;   nbb --classpath src test/nbb_smoke.cljk
+;;   kbb --backend sci --classpath src test/nbb_smoke.cljk
 (ns nbb-smoke
   (:require [jcs.core :as jcs]))
 

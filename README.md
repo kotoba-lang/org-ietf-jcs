@@ -81,9 +81,9 @@ a silently-rounded value.
 ## Test
 
 ```bash
-clojure -M:test                              # JVM
-clojure -M:lint
-nbb --classpath src test/nbb_smoke.cljk      # :cljs branch
+kbb -M:test                              # JVM
+kbb -M:lint
+kbb --backend sci --classpath src test/nbb_smoke.cljk      # :cljs branch
 ```
 
 ## License
