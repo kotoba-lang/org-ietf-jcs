@@ -1,5 +1,5 @@
 (ns jcs.core-test
-  (:require [clojure.test :refer [deftest is testing]]
+  (:require [kotoba.test :refer [deftest is testing]]
             [jcs.core :as jcs]))
 
 ;; ── RFC 8785 Appendix A: the specification's own worked example ───────────────
