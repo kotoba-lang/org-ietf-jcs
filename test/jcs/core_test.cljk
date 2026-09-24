@@ -1,5 +1,5 @@
 (ns jcs.core-test
-  (:require [kotoba.test :refer [deftest is testing]]
+  (:require [kotoba.bytes :as kbytes] [kotoba.test :refer [deftest is testing]]
             [jcs.core :as jcs]))
 
 ;; ── RFC 8785 Appendix A: the specification's own worked example ───────────────
@@ -148,7 +148,7 @@
 (deftest canonicalize-bytes-is-utf8
   (testing "§3.3: the canonical form is UTF-8 with no BOM"
     (let [b (jcs/canonicalize-bytes {"k" "é"})]
-      (is (= "{\"k\":\"é\"}" (String. b "UTF-8")))
+      (is (= "{\"k\":\"é\"}" (kbytes/utf8-string b)))
       ;; 9 characters, but é is two bytes in UTF-8, so 10 bytes.
       (is (= 9 (count "{\"k\":\"é\"}")))
       (is (= 10 (alength b))))))
