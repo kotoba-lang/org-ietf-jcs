@@ -1,5 +1,5 @@
 (ns jcs.core-test
-  (:require [kotoba.bytes :as kbytes] [kotoba.test :refer [deftest is testing]]
+  (:require [kotoba.lang.error :as kerror] [kotoba.bytes :as kbytes] [kotoba.test :refer [deftest is testing]]
             [jcs.core :as jcs]))
 
 ;; ── RFC 8785 Appendix A: the specification's own worked example ───────────────
@@ -70,20 +70,20 @@
 
 (deftest non-finite-numbers-fail-closed
   (testing "§3.2.2.3 requires termination with an error, not a placeholder"
-    (is (thrown? clojure.lang.ExceptionInfo (jcs/canonicalize Double/NaN)))
-    (is (thrown? clojure.lang.ExceptionInfo (jcs/canonicalize Double/POSITIVE_INFINITY)))
-    (is (thrown? clojure.lang.ExceptionInfo (jcs/canonicalize Double/NEGATIVE_INFINITY)))
+    (is (thrown? kerror/ExceptionInfo (jcs/canonicalize Double/NaN)))
+    (is (thrown? kerror/ExceptionInfo (jcs/canonicalize Double/POSITIVE_INFINITY)))
+    (is (thrown? kerror/ExceptionInfo (jcs/canonicalize Double/NEGATIVE_INFINITY)))
     (is (= :jcs/non-finite
            (:jcs/error (ex-data (try (jcs/canonicalize Double/NaN)
-                                     (catch clojure.lang.ExceptionInfo e e))))))))
+                                     (catch kerror/ExceptionInfo e e))))))))
 
 (deftest integers-beyond-ieee754-exact-range-fail-closed
   (testing "App. D: such numbers must be carried as strings by the application"
     (is (= "9007199254740991" (jcs/canonicalize 9007199254740991)))
-    (is (thrown? clojure.lang.ExceptionInfo (jcs/canonicalize 9007199254740992)))
+    (is (thrown? kerror/ExceptionInfo (jcs/canonicalize 9007199254740992)))
     (is (= :jcs/integer-out-of-range
            (:jcs/error (ex-data (try (jcs/canonicalize 12345678901234567890)
-                                     (catch clojure.lang.ExceptionInfo e e))))))))
+                                     (catch kerror/ExceptionInfo e e))))))))
 
 ;; ── §3.2.2.2 strings ─────────────────────────────────────────────────────────
 (deftest string-escaping
@@ -133,17 +133,17 @@
   (testing "a property name that is neither string nor keyword is refused"
     (is (= :jcs/invalid-key
            (:jcs/error (ex-data (try (jcs/canonicalize {1 "a"})
-                                     (catch clojure.lang.ExceptionInfo e e)))))))
+                                     (catch kerror/ExceptionInfo e e)))))))
 
   (testing "two keys collapsing to one JSON name would emit a duplicate member"
     (is (= :jcs/duplicate-key
            (:jcs/error (ex-data (try (jcs/canonicalize {:a 1 "a" 2})
-                                     (catch clojure.lang.ExceptionInfo e e)))))))
+                                     (catch kerror/ExceptionInfo e e)))))))
 
   (testing "a set has no defined order, so canonicalizing one would invent one"
     (is (= :jcs/unsupported-type
            (:jcs/error (ex-data (try (jcs/canonicalize #{1 2 3})
-                                     (catch clojure.lang.ExceptionInfo e e))))))))
+                                     (catch kerror/ExceptionInfo e e))))))))
 
 (deftest canonicalize-bytes-is-utf8
   (testing "§3.3: the canonical form is UTF-8 with no BOM"

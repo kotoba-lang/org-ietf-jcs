@@ -28,9 +28,8 @@
 ;;   (jcs/canonicalize {:b 1 :a 2})          ;=> "{\"a\":2,\"b\":1}"
 ;;   (jcs/canonicalize-bytes {"a" 1})        ;=> UTF-8 bytes, ready to hash
 (ns jcs.core
-  (:require [kotoba.lang.text :as str])
-  #?(:clj (:import (java.math BigDecimal MathContext RoundingMode)
-                   (java.nio.charset StandardCharsets))))
+  (:require [kotoba.bytes :as kbytes] [kotoba.lang.text :as str])
+  #?(:clj (:import (java.math BigDecimal MathContext RoundingMode))))
 
 ;; ── errors ────────────────────────────────────────────────────────────────────
 ;; Every failure is fail-closed and carries the offending value: a canonicalizer
@@ -277,5 +276,5 @@
   "`canonicalize` encoded as UTF-8 bytes — the form a hash function consumes.
    RFC 8785 §3.3 defines the canonical form as UTF-8 with no BOM."
   [data]
-  #?(:clj (.getBytes ^String (canonicalize data) StandardCharsets/UTF_8)
+  #?(:clj (kbytes/utf8-bytes ^String (canonicalize data))
      :cljs (.encode (js/TextEncoder.) (canonicalize data))))
