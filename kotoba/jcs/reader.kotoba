@@ -26,10 +26,13 @@
 ;;                      objects enumerate those first, JCS does not), only
 ;;                      the escapes both write, and integers within
 ;;                      +-(2^53-1) (both print those as plain digits)
+;;   json-canonical-bytes  the value at i in that canonical form: members
+;;                      sorted, whitespace dropped, strings re-escaped, integers
+;;                      re-printed; no bytes when it has none (the same domain)
 ;;
 ;; Strict profile, beyond RFC 8259, so that two readers cannot see two
 ;; different documents in the same bytes: duplicate keys are refused, keys
-;; may not contain escapes (so "a" and "a" cannot both appear), a \u
+;; may not contain escapes (so "a" and "\u0061" cannot both appear), a \u
 ;; surrogate must be a pair, UTF-8 must be well formed (no overlong forms,
 ;; no surrogates, nothing above U+10FFFF), and a byte order mark is not
 ;; whitespace. Navigation and decoding assume a document json-valid?
@@ -41,7 +44,8 @@
 ;; image" has the gate.
 (ns jcs.reader
   (:export [json-valid? json-end json-kind json-member json-element json-count
-            json-string-bytes json-string json-int-ok? json-int json-canonical?]))
+            json-string-bytes json-string json-int-ok? json-int json-canonical?
+            json-canonical-bytes]))
 
 ;; ---------------------------------------------------------------------------
 ;; Bytes
@@ -347,3 +351,89 @@
                 (or (= c 45) (jr-digit? c))
                 (let [e (jr-number b j)] (if (jr-canon-number? b j e) (recur e sp) false))
                 :else (recur (jr-skip-value b j) sp)))))))
+
+;; ---------------------------------------------------------------------------
+;; Canonical bytes: the RFC 8785 form of a value in a valid document, the
+;; bytes murakumo signs, emitted from the parse (members sorted, whitespace
+;; dropped, strings re-escaped, integers re-printed). The same domain as
+;; json-canonical?: a fraction or exponent, an integer beyond +-(2^53-1),
+;; or a non-ASCII or all-digit key has no canonical form here, and the
+;; answer is then no bytes. Canonical output is never longer than its input.
+
+(defn- jr-put [out :vector-i64 n :i64 c :i64] :i64 (let [z (vector-assoc! out n c)] (+ n 1)))
+
+(defn- jr-put-text [out :vector-i64 n :i64 s :string] :i64
+  (let [t (jr-bytes s)] (loop [k 0 m n] (if (= k (vector-count t)) m (recur (+ k 1) (jr-put out m (vector-at t k)))))))
+
+(defn- jr-hexd [v :i64] :i64 (if (< v 10) (+ v 48) (+ v 87)))
+
+;; decoded bytes, escaped the way RFC 8785 and JSON.stringify write them
+(defn- jr-put-string [out :vector-i64 n :i64 s :vector-i64] :i64
+  (let [m0 (jr-put out n 34)
+        m1 (loop [k 0 m m0]
+             (if (= k (vector-count s)) m
+               (let [c (vector-at s k)]
+                 (recur (+ k 1)
+                        (cond (= c 34) (jr-put out (jr-put out m 92) 34)
+                              (= c 92) (jr-put out (jr-put out m 92) 92)
+                              (= c 8) (jr-put out (jr-put out m 92) 98)
+                              (= c 12) (jr-put out (jr-put out m 92) 102)
+                              (= c 10) (jr-put out (jr-put out m 92) 110)
+                              (= c 13) (jr-put out (jr-put out m 92) 114)
+                              (= c 9) (jr-put out (jr-put out m 92) 116)
+                              (< c 32) (jr-put out (jr-put out (jr-put out (jr-put out (jr-put out (jr-put out m 92) 117) 48) 48)
+                                                                (jr-hexd (quot c 16))) (jr-hexd (rem c 16)))
+                              :else (jr-put out m c))))))]
+    (jr-put out m1 34)))
+
+;; members of an object, key starts in ks and value starts in vs, sorted by key
+(defn- jr-sort-members [b :vector-i64 ks :vector-i64 vs :vector-i64 m :i64] :i64
+  (loop [x 0]
+    (if (>= x m) 0
+      (let [best (loop [y (+ x 1) bi x]
+                   (if (= y m) bi
+                     (let [ky (vector-at ks y) kb (vector-at ks bi)]
+                       (recur (+ y 1) (if (jr-after? b ky (jr-skip-string b ky) kb (jr-skip-string b kb)) y bi)))))
+            k1 (vector-at ks x) v1 (vector-at vs x) k2 (vector-at ks best) v2 (vector-at vs best)
+            a (vector-assoc! ks x k2) c (vector-assoc! vs x v2) d (vector-assoc! ks best k1) e (vector-assoc! vs best v1)]
+        (recur (+ x 1))))))
+
+(defn- jr-emit [b :vector-i64 i :i64 out :vector-i64 n :i64] :i64
+  (let [k (json-kind b i)]
+    (cond (< n 0) n
+          (= k 1)
+          (let [m (json-count b i) ks (vector-alloc m) vs (vector-alloc m)
+                f (loop [j (jr-skip b (+ i 1)) x 0]
+                    (if (= x m) 0
+                      (let [e (jr-skip-string b j) v (jr-skip b (+ (jr-skip b e) 1))
+                            z (vector-assoc! ks x j) y (vector-assoc! vs x v)
+                            nx (jr-skip b (jr-skip-value b v))]
+                        (recur (if (= (jr-at b nx) 44) (jr-skip b (+ nx 1)) nx) (+ x 1)))))
+                ok (loop [x 0] (if (= x m) true (if (jr-canon-key? b (vector-at ks x) (jr-skip-string b (vector-at ks x))) (recur (+ x 1)) false)))]
+            (if (not ok) -1
+              (let [s (jr-sort-members b ks vs m)
+                    m2 (loop [x 0 p (jr-put out n 123)]
+                         (if (or (= x m) (< p 0)) p
+                           (let [p1 (if (> x 0) (jr-put out p 44) p)
+                                 k0 (vector-at ks x) ke (jr-skip-string b k0)
+                                 p2 (loop [q k0 r p1] (if (= q ke) r (recur (+ q 1) (jr-put out r (vector-at b q)))))]
+                             (recur (+ x 1) (jr-emit b (vector-at vs x) out (jr-put out p2 58))))))]
+                (if (< m2 0) -1 (jr-put out m2 125)))))
+          (= k 2)
+          (let [m2 (loop [j (jr-skip b (+ i 1)) x 0 p (jr-put out n 91)]
+                     (if (or (= (jr-at b j) 93) (< p 0)) p
+                       (let [p1 (jr-emit b j out (if (> x 0) (jr-put out p 44) p))
+                             nx (jr-skip b (jr-skip-value b j))]
+                         (recur (if (= (jr-at b nx) 44) (jr-skip b (+ nx 1)) nx) (+ x 1) p1))))]
+            (if (< m2 0) -1 (jr-put out m2 93)))
+          (= k 3) (jr-put-string out n (json-string-bytes b i))
+          (= k 4) (if (json-int-ok? b i) (jr-put-text out n (string-from-i64 (json-int b i))) -1)
+          (= k 5) (jr-put-text out n "true")
+          (= k 6) (jr-put-text out n "false")
+          (= k 7) (jr-put-text out n "null")
+          :else -1)))
+
+(defn json-canonical-bytes [b :vector-i64 i :i64] :vector-i64
+  (let [out (vector-alloc (vector-count b)) n (jr-emit b i out 0)]
+    (if (< n 0) (vector-alloc 0)
+      (loop [k 0 r (vector-alloc n)] (if (= k n) r (recur (+ k 1) (vector-assoc! r k (vector-at out k))))))))
